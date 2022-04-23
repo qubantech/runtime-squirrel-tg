@@ -1,8 +1,13 @@
+import math
+import random
+from datetime import datetime
+
 import telebot
 from telebot import types
 import firebase_admin
 from firebase_admin import credentials
 from firebase_admin import db
+import pandas as pd
 
 
 def newNotifications(event):
@@ -71,12 +76,33 @@ def setUID(message, uid):
 @bot.message_handler(content_types=['text'])
 def get_text_messages(message):
     uid = check_auth(message.from_user.id)
+    project_markup = types.ReplyKeyboardMarkup(row_width=3)
+    itembtn1 = types.KeyboardButton('Назад')
+    project_markup.add(itembtn1)
     if uid != "None":
         if message.text == "Мои проекты":
-            project_markup = types.ReplyKeyboardMarkup(row_width=3)
-            itembtn1 = types.KeyboardButton('Назад')
-            project_markup.add(itembtn1)
-            bot.send_message(message.from_user.id, "sas1", reply_markup=project_markup)
+            prdata = db.reference("/projects").get()
+            chdata = db.reference("/checkpoints").get()
+            print(prdata)
+            if prdata:
+                for el in prdata:
+                    action_markup = types.InlineKeyboardMarkup()
+                    btn_action = types.InlineKeyboardButton(text='Перейти к проекту', url="https://quban.tech")
+                    action_markup.add(btn_action)
+                    if el['status'] == 'current' or el['status'] =='pending':
+                        bot.send_message(message.from_user.id, "Название: "+el['title'] + "\nСтатус: в работе")
+                        newstr = "empty"
+                        for el2 in el['checkpoints']:
+                            if chdata[int(el2)]['status'] == 'current' or chdata[int(el2)]['status'] =='pending':
+                                if newstr == "empty": newstr = "Текущие контрольной точки:\n\n"
+                                dt = random.randint(1, 29)
+                                if (dt<10): newstr+="[Скоро дедлайн!]\n"
+                                newstr += "Тема контрольной точки: "+chdata[int(el2)]['title'] + "\nВремя дедлайна: "+ str(pd.to_datetime(str(dt)+'-05-2022', infer_datetime_format=True) ) + "\nСтатус: в работе" + "\n\n"
+                        if newstr == "Текущие контрольные точки:\n":
+                            newstr+= "На данный момент активных задач нет."
+                        if newstr != "empty":
+                            bot.send_message(message.from_user.id, newstr, reply_markup=action_markup)
+                bot.send_message(message.from_user.id, "Что делаем дальше?", reply_markup=project_markup)
         elif message.text == "Информация о пользователе":
             userdata = db.reference("/users/" + str(uid)).get()
             bot.send_message(message.from_user.id, "Nickname: " + userdata["nickname"] + "\nИмя: " + userdata["firstname"] + "\nФамилия: " + userdata["lastname"] + "\nПочта: " + userdata["email"])
